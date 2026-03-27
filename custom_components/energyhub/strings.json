@@ -26,7 +26,8 @@
         "description": "Welcher Sensor misst deinen Netzbezug und deine PV-Produktion?",
         "data": {
           "grid_power_entity": "Netzbezug / Einspeisung (Zaehler am Hausanschluss)",
-          "pv_power_entity": "PV-Produktion (Wechselrichter / PV-Sensor)"
+          "pv_power_entity": "PV-Produktion (Wechselrichter / PV-Sensor)",
+          "invert_grid": "Vorzeichen Netzbezug umkehren (wenn Bezug/Einspeisung vertauscht)"
         }
       },
       "battery": {

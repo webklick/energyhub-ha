@@ -14,7 +14,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
     CONF_GRID_POWER, CONF_PV_POWER, CONF_BATTERY_POWER, CONF_BATTERY_SOC,
-    CONF_SWITCHES, DEFAULT_SCAN_INTERVAL,
+    CONF_SWITCHES, CONF_INVERT_GRID, DEFAULT_SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,6 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     battery_entity = entry.options.get(CONF_BATTERY_POWER, "")
     battery_soc_entity = entry.options.get(CONF_BATTERY_SOC, "")
     switch_entities = entry.options.get(CONF_SWITCHES, [])
+    invert_grid = entry.options.get(CONF_INVERT_GRID, False)
 
     # Build set of entities to push
     assigned = {e for e in [grid_entity, pv_entity, battery_entity, battery_soc_entity] if e}
@@ -98,9 +99,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if state.state in ("unavailable", "unknown"):
                 continue
 
+            # Invert grid power if configured
+            value = state.state
+            if invert_grid and state.entity_id == grid_entity:
+                try:
+                    value = str(-float(value))
+                except (ValueError, TypeError):
+                    pass
+
             entry_data = {
                 "entity_id": state.entity_id,
-                "state": state.state,
+                "state": value,
                 "attributes": {
                     "unit_of_measurement": state.attributes.get("unit_of_measurement"),
                     "friendly_name": state.attributes.get("friendly_name"),

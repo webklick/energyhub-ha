@@ -10,7 +10,7 @@ import homeassistant.helpers.config_validation as cv
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
     CONF_GRID_POWER, CONF_PV_POWER, CONF_BATTERY_POWER, CONF_BATTERY_SOC,
-    CONF_SWITCHES, DEFAULT_API_URL, DEFAULT_SCAN_INTERVAL,
+    CONF_SWITCHES, CONF_INVERT_GRID, DEFAULT_API_URL, DEFAULT_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL,
 )
 
@@ -144,6 +144,10 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
                     CONF_PV_POWER,
                     default=entry.options.get(CONF_PV_POWER, ""),
                 ): vol.In(all_sensors),
+                vol.Optional(
+                    CONF_INVERT_GRID,
+                    default=entry.options.get(CONF_INVERT_GRID, False),
+                ): bool,
             }),
         )
 

@@ -11,4 +11,5 @@ CONF_PV_POWER = "pv_power_entity"            # PV Produktion (W)
 CONF_BATTERY_POWER = "battery_power_entity"  # Batterie Leistung (W)
 CONF_BATTERY_SOC = "battery_soc_entity"      # Batterie Ladestand (%)
 CONF_SWITCHES = "switch_entities"            # Schalter zum Freigeben
+CONF_INVERT_GRID = "invert_grid"             # Vorzeichen Netzbezug umkehren
 DEFAULT_API_URL = "https://eeg.svr.dev/api"
