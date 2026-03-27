@@ -1,0 +1,11 @@
+{
+  "domain": "energyhub",
+  "name": "EnergyHub - Energiegemeinschaft",
+  "documentation": "https://github.com/energyhub/ha-integration",
+  "version": "1.0.0",
+  "codeowners": ["@energyhub"],
+  "config_flow": true,
+  "iot_class": "cloud_push",
+  "requirements": ["aiohttp"],
+  "integration_type": "hub"
+}

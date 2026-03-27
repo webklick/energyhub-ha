@@ -1,0 +1,113 @@
+"""EnergyHub integration for Home Assistant.
+
+Pushes energy sensor data to the EnergyHub cloud platform.
+Allows device control from EnergyHub dashboard.
+"""
+import logging
+from datetime import timedelta
+
+import aiohttp
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .const import DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, DEFAULT_SCAN_INTERVAL
+
+_LOGGER = logging.getLogger(__name__)
+
+ENERGY_DEVICE_CLASSES = {"power", "energy", "voltage", "current", "power_factor", "frequency"}
+ENERGY_UNITS = {"w", "kw", "wh", "kwh", "v", "a", "va"}
+
+
+def is_energy_entity(state: State) -> bool:
+    """Check if an entity is energy-related."""
+    domain = state.entity_id.split(".")[0]
+    attrs = state.attributes
+
+    # Sensors with energy device class
+    if domain == "sensor":
+        dc = attrs.get("device_class", "")
+        if dc in ENERGY_DEVICE_CLASSES:
+            return True
+        unit = (attrs.get("unit_of_measurement") or "").lower()
+        if unit in ENERGY_UNITS:
+            return True
+
+    # Switches (for device control)
+    if domain == "switch":
+        return True
+
+    return False
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up EnergyHub from a config entry."""
+    api_url = entry.data[CONF_API_URL]
+    webhook_key = entry.data[CONF_PAIRING_CODE]
+    session = async_get_clientsession(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = {
+        "api_url": api_url,
+        "webhook_key": webhook_key,
+    }
+
+    async def push_energy_data(_now=None):
+        """Collect all energy entities and push to EnergyHub."""
+        states = []
+        for state in hass.states.async_all():
+            if not is_energy_entity(state):
+                continue
+            if state.state in ("unavailable", "unknown"):
+                continue
+
+            states.append({
+                "entity_id": state.entity_id,
+                "state": state.state,
+                "attributes": {
+                    "unit_of_measurement": state.attributes.get("unit_of_measurement"),
+                    "friendly_name": state.attributes.get("friendly_name"),
+                    "device_class": state.attributes.get("device_class"),
+                    "icon": state.attributes.get("icon"),
+                },
+                "last_changed": state.last_changed.isoformat() if state.last_changed else None,
+            })
+
+        if not states:
+            return
+
+        try:
+            async with session.post(
+                f"{api_url}/webhook/{webhook_key}",
+                json={"states": states},
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status == 200:
+                    _LOGGER.debug("Pushed %d entities to EnergyHub", len(states))
+                else:
+                    _LOGGER.warning("EnergyHub push failed: HTTP %d", resp.status)
+        except Exception as err:
+            _LOGGER.warning("EnergyHub push error: %s", err)
+
+    # Push data every 30 seconds
+    cancel_interval = async_track_time_interval(
+        hass, push_energy_data, timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+    )
+
+    hass.data[DOMAIN][entry.entry_id]["cancel_interval"] = cancel_interval
+
+    # Initial push
+    await push_energy_data()
+
+    _LOGGER.info("EnergyHub integration started — pushing energy data every %ds", DEFAULT_SCAN_INTERVAL)
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload EnergyHub config entry."""
+    data = hass.data[DOMAIN].pop(entry.entry_id, {})
+    cancel = data.get("cancel_interval")
+    if cancel:
+        cancel()
+    return True

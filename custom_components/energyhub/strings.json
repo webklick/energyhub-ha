@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EnergyHub verbinden",
+        "description": "Gib den Kopplungscode aus deiner EnergyHub-App ein.",
+        "data": {
+          "pairing_code": "Kopplungscode",
+          "api_url": "EnergyHub Server URL"
+        }
+      }
+    },
+    "error": {
+      "invalid_code": "Ungueltiger Kopplungscode",
+      "connection_failed": "Verbindung zum EnergyHub Server fehlgeschlagen"
+    },
+    "abort": {
+      "already_configured": "EnergyHub ist bereits eingerichtet"
+    }
+  }
+}
