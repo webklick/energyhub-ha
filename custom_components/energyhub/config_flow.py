@@ -126,6 +126,13 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
         entry = self.config_entry
         all_sensors = _get_sensor_options(self.hass)
 
+        # Also include ALL entities currently in HA (even if not yet in list)
+        for s in self.hass.states.async_all():
+            if s.entity_id not in all_sensors:
+                name = s.attributes.get("friendly_name", s.entity_id)
+                unit = s.attributes.get("unit_of_measurement", "")
+                all_sensors[s.entity_id] = f"{name} [{unit}]" if unit else name
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
@@ -148,6 +155,11 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
 
         entry = self.config_entry
         all_sensors = _get_sensor_options(self.hass)
+        for s in self.hass.states.async_all():
+            if s.entity_id not in all_sensors:
+                name = s.attributes.get("friendly_name", s.entity_id)
+                unit = s.attributes.get("unit_of_measurement", "")
+                all_sensors[s.entity_id] = f"{name} [{unit}]" if unit else name
 
         return self.async_show_form(
             step_id="battery",
