@@ -22,17 +22,27 @@
   "options": {
     "step": {
       "init": {
-        "title": "EnergyHub Einstellungen",
-        "description": "Wie oft sollen Daten an EnergyHub gesendet werden?",
+        "title": "Energiesensoren zuweisen",
+        "description": "Welcher Sensor misst deinen Netzbezug und deine PV-Produktion?",
         "data": {
-          "scan_interval": "Sende-Intervall (Sekunden)"
+          "grid_power_entity": "Netzbezug / Einspeisung (Zaehler am Hausanschluss)",
+          "pv_power_entity": "PV-Produktion (Wechselrichter / PV-Sensor)"
         }
       },
-      "entities": {
-        "title": "Entities auswaehlen",
-        "description": "Welche Entities sollen an EnergyHub gesendet werden? Wenn du keine auswaehlst, werden automatisch alle Energie-Sensoren erkannt.",
+      "battery": {
+        "title": "Batteriespeicher (optional)",
+        "description": "Hast du einen Batteriespeicher? Wenn nicht, lass die Felder leer.",
         "data": {
-          "selected_entities": "Entities fuer EnergyHub"
+          "battery_power_entity": "Batterie Leistung (Laden/Entladen)",
+          "battery_soc_entity": "Batterie Ladestand (%)"
+        }
+      },
+      "switches": {
+        "title": "Schalter & Intervall",
+        "description": "Welche Schalter sollen ueber EnergyHub steuerbar sein? Und wie oft sollen Daten gesendet werden?",
+        "data": {
+          "scan_interval": "Sende-Intervall (Sekunden)",
+          "switch_entities": "Schalter freigeben"
         }
       }
     }

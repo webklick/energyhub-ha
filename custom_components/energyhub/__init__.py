@@ -13,7 +13,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
-    CONF_SELECTED_ENTITIES, DEFAULT_SCAN_INTERVAL,
+    CONF_GRID_POWER, CONF_PV_POWER, CONF_BATTERY_POWER, CONF_BATTERY_SOC,
+    CONF_SWITCHES, DEFAULT_SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -53,47 +54,86 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     interval = entry.options.get(CONF_SCAN_INTERVAL,
                 entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
 
-    # Which entities to sync — empty list = all energy entities (auto-detect)
-    selected = entry.options.get(CONF_SELECTED_ENTITIES, [])
+    # Entity role assignments from options
+    grid_entity = entry.options.get(CONF_GRID_POWER, "")
+    pv_entity = entry.options.get(CONF_PV_POWER, "")
+    battery_entity = entry.options.get(CONF_BATTERY_POWER, "")
+    battery_soc_entity = entry.options.get(CONF_BATTERY_SOC, "")
+    switch_entities = entry.options.get(CONF_SWITCHES, [])
+
+    # Build set of entities to push
+    assigned = {e for e in [grid_entity, pv_entity, battery_entity, battery_soc_entity] if e}
+    assigned.update(switch_entities)
 
     session = async_get_clientsession(hass)
     hass.data.setdefault(DOMAIN, {})
 
+    # Role map: entity_id -> role name
+    role_map = {}
+    if grid_entity:
+        role_map[grid_entity] = "grid_power"
+    if pv_entity:
+        role_map[pv_entity] = "pv_power"
+    if battery_entity:
+        role_map[battery_entity] = "battery_power"
+    if battery_soc_entity:
+        role_map[battery_soc_entity] = "battery_soc"
+    for sw in switch_entities:
+        role_map[sw] = "switch"
+
     async def push_energy_data(_now=None):
-        """Collect selected energy entities and push to EnergyHub."""
+        """Collect assigned entities and push to EnergyHub."""
         states = []
+
         for state in hass.states.async_all():
-            # If user selected specific entities, only push those
-            if selected:
-                if state.entity_id not in selected:
+            # If entities are assigned, push those + auto-detect rest
+            if assigned:
+                if state.entity_id not in assigned and not is_energy_entity(state):
                     continue
             else:
-                # Auto-detect: push all energy entities
+                # Nothing assigned yet — push all energy entities
                 if not is_energy_entity(state):
                     continue
 
             if state.state in ("unavailable", "unknown"):
                 continue
 
-            states.append({
+            entry_data = {
                 "entity_id": state.entity_id,
                 "state": state.state,
                 "attributes": {
                     "unit_of_measurement": state.attributes.get("unit_of_measurement"),
                     "friendly_name": state.attributes.get("friendly_name"),
                     "device_class": state.attributes.get("device_class"),
-                    "icon": state.attributes.get("icon"),
                 },
                 "last_changed": state.last_changed.isoformat() if state.last_changed else None,
-            })
+            }
+
+            # Add role if assigned
+            if state.entity_id in role_map:
+                entry_data["role"] = role_map[state.entity_id]
+
+            states.append(entry_data)
 
         if not states:
             return
 
+        # Also send the role assignments as metadata
+        payload = {
+            "states": states,
+            "roles": {
+                "grid_power": grid_entity or None,
+                "pv_power": pv_entity or None,
+                "battery_power": battery_entity or None,
+                "battery_soc": battery_soc_entity or None,
+                "switches": switch_entities or [],
+            },
+        }
+
         try:
             async with session.post(
                 f"{api_url}/webhook/{webhook_key}",
-                json={"states": states},
+                json=payload,
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 if resp.status == 200:
@@ -116,8 +156,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Initial push
     await push_energy_data()
 
-    entity_info = f"{len(selected)} ausgewaehlt" if selected else "alle Energie-Entities (auto)"
-    _LOGGER.info("EnergyHub gestartet — %s, alle %ds", entity_info, interval)
+    roles_info = []
+    if grid_entity:
+        roles_info.append(f"Netz={grid_entity}")
+    if pv_entity:
+        roles_info.append(f"PV={pv_entity}")
+    if battery_entity:
+        roles_info.append(f"Batterie={battery_entity}")
+    _LOGGER.info("EnergyHub gestartet — %s, alle %ds", ", ".join(roles_info) or "auto-detect", interval)
     return True
 
 

@@ -9,11 +9,40 @@ import homeassistant.helpers.config_validation as cv
 
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
-    CONF_SELECTED_ENTITIES, DEFAULT_API_URL, DEFAULT_SCAN_INTERVAL,
+    CONF_GRID_POWER, CONF_PV_POWER, CONF_BATTERY_POWER, CONF_BATTERY_SOC,
+    CONF_SWITCHES, DEFAULT_API_URL, DEFAULT_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_sensor_options(hass, filter_units=None):
+    """Build entity dict for dropdowns. filter_units: set of units to include, or None for all."""
+    options = {"": "-- Nicht zugewiesen --"}
+    for s in sorted(hass.states.async_all(), key=lambda x: x.attributes.get("friendly_name", x.entity_id)):
+        if s.entity_id.split(".")[0] != "sensor":
+            continue
+        if s.state in ("unavailable",):
+            continue
+        name = s.attributes.get("friendly_name", s.entity_id)
+        unit = s.attributes.get("unit_of_measurement", "")
+        if filter_units and unit.lower() not in filter_units:
+            continue
+        options[s.entity_id] = f"{name} [{unit}]" if unit else name
+    return options
+
+
+def _get_switch_options(hass):
+    """Build switch entity dict for multi-select."""
+    options = {}
+    for s in sorted(hass.states.async_all(), key=lambda x: x.attributes.get("friendly_name", x.entity_id)):
+        domain = s.entity_id.split(".")[0]
+        if domain not in ("switch", "input_boolean"):
+            continue
+        name = s.attributes.get("friendly_name", s.entity_id)
+        options[s.entity_id] = name
+    return options
 
 
 async def validate_pairing_code(hass: HomeAssistant, api_url: str, code: str) -> dict:
@@ -43,7 +72,7 @@ class EnergyHubConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step — pairing code."""
+        """Step 1: Pairing code."""
         errors = {}
 
         if user_input is not None:
@@ -86,39 +115,78 @@ class EnergyHubConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class EnergyHubOptionsFlow(config_entries.OptionsFlow):
-    """Handle EnergyHub options."""
+    """Guided setup: assign entities to energy roles."""
 
     async def async_step_init(self, user_input=None):
-        """Interval + entity selection."""
+        """Step 1: Grid + PV sensors."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            self._data = user_input
+            return await self.async_step_battery()
 
         entry = self.config_entry
+        power_sensors = _get_sensor_options(self.hass, {"w", "kw"})
+        all_sensors = _get_sensor_options(self.hass)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_GRID_POWER,
+                    default=entry.options.get(CONF_GRID_POWER, ""),
+                ): vol.In(power_sensors if len(power_sensors) > 1 else all_sensors),
+                vol.Optional(
+                    CONF_PV_POWER,
+                    default=entry.options.get(CONF_PV_POWER, ""),
+                ): vol.In(power_sensors if len(power_sensors) > 1 else all_sensors),
+            }),
+        )
+
+    async def async_step_battery(self, user_input=None):
+        """Step 2: Battery sensors."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_switches()
+
+        entry = self.config_entry
+        power_sensors = _get_sensor_options(self.hass, {"w", "kw"})
+        all_sensors = _get_sensor_options(self.hass)
+        pct_sensors = _get_sensor_options(self.hass, {"%"})
+
+        return self.async_show_form(
+            step_id="battery",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_BATTERY_POWER,
+                    default=entry.options.get(CONF_BATTERY_POWER, ""),
+                ): vol.In(power_sensors if len(power_sensors) > 1 else all_sensors),
+                vol.Optional(
+                    CONF_BATTERY_SOC,
+                    default=entry.options.get(CONF_BATTERY_SOC, ""),
+                ): vol.In(pct_sensors if len(pct_sensors) > 1 else all_sensors),
+            }),
+        )
+
+    async def async_step_switches(self, user_input=None):
+        """Step 3: Switches + interval."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return self.async_create_entry(title="", data=self._data)
+
+        entry = self.config_entry
+        switch_options = _get_switch_options(self.hass)
         current_interval = entry.options.get(
             CONF_SCAN_INTERVAL,
             entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         )
-        current_entities = entry.options.get(CONF_SELECTED_ENTITIES, [])
-
-        # Build entity multi-select
-        entity_dict = {}
-        try:
-            from . import get_all_energy_entities
-            for s in sorted(get_all_energy_entities(self.hass),
-                          key=lambda x: x.attributes.get("friendly_name", x.entity_id)):
-                name = s.attributes.get("friendly_name", s.entity_id)
-                unit = s.attributes.get("unit_of_measurement", "")
-                entity_dict[s.entity_id] = f"{name} [{unit}]" if unit else name
-        except Exception as err:
-            _LOGGER.error("Error loading entities: %s", err)
+        current_switches = entry.options.get(CONF_SWITCHES, [])
 
         schema_fields = {
             vol.Required(CONF_SCAN_INTERVAL, default=current_interval): int,
         }
-        if entity_dict:
-            schema_fields[vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities)] = cv.multi_select(entity_dict)
+        if switch_options:
+            schema_fields[vol.Optional(CONF_SWITCHES, default=current_switches)] = cv.multi_select(switch_options)
 
         return self.async_show_form(
-            step_id="init",
+            step_id="switches",
             data_schema=vol.Schema(schema_fields),
         )
