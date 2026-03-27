@@ -87,12 +87,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         states = []
 
         for state in hass.states.async_all():
-            # If entities are assigned, push those + auto-detect rest
+            # If entities are assigned, push ONLY those
             if assigned:
-                if state.entity_id not in assigned and not is_energy_entity(state):
+                if state.entity_id not in assigned:
                     continue
             else:
-                # Nothing assigned yet — push all energy entities
+                # Nothing assigned yet — push all energy entities (auto-detect)
                 if not is_energy_entity(state):
                     continue
 
