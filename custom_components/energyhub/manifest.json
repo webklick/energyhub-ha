@@ -2,7 +2,7 @@
   "domain": "energyhub",
   "name": "EnergyHub - Energiegemeinschaft",
   "documentation": "https://github.com/webklick/energyhub-ha",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "codeowners": ["@energyhub"],
   "config_flow": true,
   "iot_class": "cloud_push",

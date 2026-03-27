@@ -82,75 +82,43 @@ class EnergyHubConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Options flow handler."""
-        return EnergyHubOptionsFlow(config_entry)
+        return EnergyHubOptionsFlow()
 
 
 class EnergyHubOptionsFlow(config_entries.OptionsFlow):
     """Handle EnergyHub options."""
 
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
-
     async def async_step_init(self, user_input=None):
-        """Step 1: Interval setting."""
+        """Interval + entity selection."""
         if user_input is not None:
-            # Go to entity selection
-            self._interval = user_input[CONF_SCAN_INTERVAL]
-            return await self.async_step_entities()
+            return self.async_create_entry(title="", data=user_input)
 
-        current_interval = self.config_entry.options.get(
+        entry = self.config_entry
+        current_interval = entry.options.get(
             CONF_SCAN_INTERVAL,
-            self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+            entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         )
+        current_entities = entry.options.get(CONF_SELECTED_ENTITIES, [])
+
+        # Build entity multi-select
+        entity_dict = {}
+        try:
+            from . import get_all_energy_entities
+            for s in sorted(get_all_energy_entities(self.hass),
+                          key=lambda x: x.attributes.get("friendly_name", x.entity_id)):
+                name = s.attributes.get("friendly_name", s.entity_id)
+                unit = s.attributes.get("unit_of_measurement", "")
+                entity_dict[s.entity_id] = f"{name} [{unit}]" if unit else name
+        except Exception as err:
+            _LOGGER.error("Error loading entities: %s", err)
+
+        schema_fields = {
+            vol.Required(CONF_SCAN_INTERVAL, default=current_interval): int,
+        }
+        if entity_dict:
+            schema_fields[vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities)] = cv.multi_select(entity_dict)
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({
-                vol.Required(CONF_SCAN_INTERVAL, default=current_interval): int,
-            }),
-        )
-
-    async def async_step_entities(self, user_input=None):
-        """Step 2: Entity selection."""
-        if user_input is not None:
-            selected = user_input.get(CONF_SELECTED_ENTITIES, [])
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_SCAN_INTERVAL: self._interval,
-                    CONF_SELECTED_ENTITIES: selected,
-                },
-            )
-
-        current_entities = self.config_entry.options.get(CONF_SELECTED_ENTITIES, [])
-
-        # Build multi-select from available energy entities
-        try:
-            from . import get_all_energy_entities
-            available = get_all_energy_entities(self.hass)
-            entity_dict = {}
-            for s in sorted(available, key=lambda x: x.attributes.get("friendly_name", x.entity_id)):
-                name = s.attributes.get("friendly_name", s.entity_id)
-                unit = s.attributes.get("unit_of_measurement", "")
-                label = f"{name} [{unit}]" if unit else name
-                entity_dict[s.entity_id] = label
-        except Exception as err:
-            _LOGGER.error("Error loading entities: %s", err)
-            entity_dict = {}
-
-        if not entity_dict:
-            # No entities found — skip this step, save interval only
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_SCAN_INTERVAL: self._interval,
-                    CONF_SELECTED_ENTITIES: [],
-                },
-            )
-
-        return self.async_show_form(
-            step_id="entities",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities): cv.multi_select(entity_dict),
-            }),
+            data_schema=vol.Schema(schema_fields),
         )
