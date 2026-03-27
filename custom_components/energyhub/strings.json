@@ -6,6 +6,7 @@
         "description": "Gib den Kopplungscode aus deiner EnergyHub-App ein.",
         "data": {
           "pairing_code": "Kopplungscode",
+          "scan_interval": "Sende-Intervall (Sekunden)",
           "api_url": "EnergyHub Server URL"
         }
       }
@@ -16,6 +17,16 @@
     },
     "abort": {
       "already_configured": "EnergyHub ist bereits eingerichtet"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EnergyHub Einstellungen",
+        "data": {
+          "scan_interval": "Sende-Intervall (Sekunden)"
+        }
+      }
     }
   }
 }
