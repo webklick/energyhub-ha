@@ -5,7 +5,13 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers import selector
+from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
@@ -72,9 +78,7 @@ class EnergyHubConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required(CONF_PAIRING_CODE): str,
-                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): vol.All(
-                    vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
-                ),
+                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): int,
                 vol.Optional(CONF_API_URL, default=DEFAULT_API_URL): str,
             }),
             errors=errors,
@@ -107,21 +111,19 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
+                vol.Required(CONF_SCAN_INTERVAL, default=current_interval): NumberSelector(
+                    NumberSelectorConfig(
                         min=MIN_SCAN_INTERVAL,
                         max=MAX_SCAN_INTERVAL,
                         step=5,
-                        unit_of_measurement="Sekunden",
-                        mode=selector.NumberSelectorMode.SLIDER,
+                        unit_of_measurement="s",
+                        mode=NumberSelectorMode.SLIDER,
                     )
                 ),
-                vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities): selector.EntitySelector(
-                    selector.EntitySelectorConfig(
+                vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities): EntitySelector(
+                    EntitySelectorConfig(
+                        domain=["sensor", "switch"],
                         multiple=True,
-                        filter=selector.EntityFilterSelectorConfig(
-                            domain=["sensor", "switch"],
-                        ),
                     )
                 ),
             }),
