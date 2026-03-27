@@ -23,8 +23,10 @@
     "step": {
       "init": {
         "title": "EnergyHub Einstellungen",
+        "description": "Waehle welche Entities an EnergyHub gesendet werden sollen. Wenn du keine auswaehlst, werden automatisch alle Energie-Sensoren erkannt.",
         "data": {
-          "scan_interval": "Sende-Intervall (Sekunden)"
+          "scan_interval": "Sende-Intervall (Sekunden)",
+          "selected_entities": "Entities fuer EnergyHub"
         }
       }
     }

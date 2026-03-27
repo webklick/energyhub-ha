@@ -8,7 +8,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
-    DEFAULT_API_URL, DEFAULT_SCAN_INTERVAL, MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL,
+    CONF_SELECTED_ENTITIES, DEFAULT_API_URL, DEFAULT_SCAN_INTERVAL,
+    MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,13 +20,11 @@ async def validate_pairing_code(hass: HomeAssistant, api_url: str, code: str) ->
     url = f"{api_url}/webhook/{code}"
     session = async_get_clientsession(hass)
     try:
-        _LOGGER.debug("Testing EnergyHub connection: POST %s", url)
         async with session.post(
             url,
             json={"entity_id": "_ping", "state": "connected"},
             timeout=aiohttp.ClientTimeout(total=15),
         ) as resp:
-            _LOGGER.debug("EnergyHub response: %d", resp.status)
             if resp.status == 200:
                 return {"success": True}
             elif resp.status == 404:
@@ -43,7 +42,7 @@ class EnergyHubConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
+        """Handle the initial step — pairing code."""
         errors = {}
 
         if user_input is not None:
@@ -83,27 +82,56 @@ class EnergyHubConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Options flow — allows changing interval after setup."""
+        """Options flow handler."""
         return EnergyHubOptionsFlow(config_entry)
 
 
 class EnergyHubOptionsFlow(config_entries.OptionsFlow):
-    """Handle options for EnergyHub (change interval after setup)."""
+    """Handle EnergyHub options — entity selection + interval."""
 
     def __init__(self, config_entry):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        """Show entity picker + interval setting."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current = self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        # Get all energy entities for the multi-select
+        from . import get_all_energy_entities
+        energy_entities = get_all_energy_entities(self.hass)
+
+        # Build options dict: entity_id -> "Friendly Name (entity_id)"
+        entity_options = {}
+        for state in sorted(energy_entities, key=lambda s: s.attributes.get("friendly_name", s.entity_id)):
+            name = state.attributes.get("friendly_name", state.entity_id)
+            unit = state.attributes.get("unit_of_measurement", "")
+            dc = state.attributes.get("device_class", "")
+            label = f"{name}"
+            if unit:
+                label += f" [{unit}]"
+            if dc:
+                label += f" ({dc})"
+            entity_options[state.entity_id] = label
+
+        # Current selections
+        current_entities = self.config_entry.options.get(CONF_SELECTED_ENTITIES, [])
+        current_interval = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL,
+            self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        )
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Optional(CONF_SCAN_INTERVAL, default=current): vol.All(
+                vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
                     vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
                 ),
+                vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities): vol.All(
+                    vol.ensure_list, [vol.In(entity_options)]
+                ),
             }),
+            description_placeholders={
+                "entity_count": str(len(energy_entities)),
+            },
         )

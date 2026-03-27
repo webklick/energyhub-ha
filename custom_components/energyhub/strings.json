@@ -23,8 +23,10 @@
     "step": {
       "init": {
         "title": "EnergyHub Einstellungen",
+        "description": "Waehle welche Entities an EnergyHub gesendet werden. Leer = alle Energie-Entities automatisch.",
         "data": {
-          "scan_interval": "Sende-Intervall (Sekunden)"
+          "scan_interval": "Sende-Intervall (Sekunden)",
+          "selected_entities": "Entities fuer EnergyHub"
         }
       }
     }

@@ -5,4 +5,5 @@ MAX_SCAN_INTERVAL = 300
 CONF_PAIRING_CODE = "pairing_code"
 CONF_API_URL = "api_url"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_SELECTED_ENTITIES = "selected_entities"
 DEFAULT_API_URL = "https://eeg.svr.dev/api"

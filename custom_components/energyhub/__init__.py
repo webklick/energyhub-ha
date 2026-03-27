@@ -1,7 +1,6 @@
 """EnergyHub integration for Home Assistant.
 
 Pushes energy sensor data to the EnergyHub cloud platform.
-Allows device control from EnergyHub dashboard.
 """
 import logging
 from datetime import timedelta
@@ -14,7 +13,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
-    DEFAULT_SCAN_INTERVAL,
+    CONF_SELECTED_ENTITIES, DEFAULT_SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,26 +41,37 @@ def is_energy_entity(state: State) -> bool:
     return False
 
 
+def get_all_energy_entities(hass: HomeAssistant) -> list[State]:
+    """Get all energy-relevant entities."""
+    return [s for s in hass.states.async_all() if is_energy_entity(s)]
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up EnergyHub from a config entry."""
     api_url = entry.data[CONF_API_URL]
     webhook_key = entry.data[CONF_PAIRING_CODE]
-    interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    interval = entry.options.get(CONF_SCAN_INTERVAL,
+                entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
 
-    # Options override config (allows changing interval after setup)
-    if entry.options.get(CONF_SCAN_INTERVAL):
-        interval = entry.options[CONF_SCAN_INTERVAL]
+    # Which entities to sync — empty list = all energy entities (auto-detect)
+    selected = entry.options.get(CONF_SELECTED_ENTITIES, [])
 
     session = async_get_clientsession(hass)
-
     hass.data.setdefault(DOMAIN, {})
 
     async def push_energy_data(_now=None):
-        """Collect all energy entities and push to EnergyHub."""
+        """Collect selected energy entities and push to EnergyHub."""
         states = []
         for state in hass.states.async_all():
-            if not is_energy_entity(state):
-                continue
+            # If user selected specific entities, only push those
+            if selected:
+                if state.entity_id not in selected:
+                    continue
+            else:
+                # Auto-detect: push all energy entities
+                if not is_energy_entity(state):
+                    continue
+
             if state.state in ("unavailable", "unknown"):
                 continue
 
@@ -98,18 +108,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     hass.data[DOMAIN][entry.entry_id] = {
-        "api_url": api_url,
-        "webhook_key": webhook_key,
         "cancel_interval": cancel_interval,
     }
 
-    # Reload when options change (interval)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     # Initial push
     await push_energy_data()
 
-    _LOGGER.info("EnergyHub started — pushing every %ds", interval)
+    entity_info = f"{len(selected)} ausgewaehlt" if selected else "alle Energie-Entities (auto)"
+    _LOGGER.info("EnergyHub gestartet — %s, alle %ds", entity_info, interval)
     return True
 
 
