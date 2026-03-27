@@ -5,6 +5,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import selector
 
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
@@ -97,24 +98,6 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Get all energy entities for the multi-select
-        from . import get_all_energy_entities
-        energy_entities = get_all_energy_entities(self.hass)
-
-        # Build options dict: entity_id -> "Friendly Name (entity_id)"
-        entity_options = {}
-        for state in sorted(energy_entities, key=lambda s: s.attributes.get("friendly_name", s.entity_id)):
-            name = state.attributes.get("friendly_name", state.entity_id)
-            unit = state.attributes.get("unit_of_measurement", "")
-            dc = state.attributes.get("device_class", "")
-            label = f"{name}"
-            if unit:
-                label += f" [{unit}]"
-            if dc:
-                label += f" ({dc})"
-            entity_options[state.entity_id] = label
-
-        # Current selections
         current_entities = self.config_entry.options.get(CONF_SELECTED_ENTITIES, [])
         current_interval = self.config_entry.options.get(
             CONF_SCAN_INTERVAL,
@@ -124,14 +107,22 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
-                    vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
+                vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_SCAN_INTERVAL,
+                        max=MAX_SCAN_INTERVAL,
+                        step=5,
+                        unit_of_measurement="Sekunden",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
                 ),
-                vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities): vol.All(
-                    vol.ensure_list, [vol.In(entity_options)]
+                vol.Optional(CONF_SELECTED_ENTITIES, default=current_entities): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        multiple=True,
+                        filter=selector.EntityFilterSelectorConfig(
+                            domain=["sensor", "switch"],
+                        ),
+                    )
                 ),
             }),
-            description_placeholders={
-                "entity_count": str(len(energy_entities)),
-            },
         )
