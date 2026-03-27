@@ -124,7 +124,6 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_battery()
 
         entry = self.config_entry
-        power_sensors = _get_sensor_options(self.hass, {"w", "kw"})
         all_sensors = _get_sensor_options(self.hass)
 
         return self.async_show_form(
@@ -133,11 +132,11 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_GRID_POWER,
                     default=entry.options.get(CONF_GRID_POWER, ""),
-                ): vol.In(power_sensors if len(power_sensors) > 1 else all_sensors),
+                ): vol.In(all_sensors),
                 vol.Optional(
                     CONF_PV_POWER,
                     default=entry.options.get(CONF_PV_POWER, ""),
-                ): vol.In(power_sensors if len(power_sensors) > 1 else all_sensors),
+                ): vol.In(all_sensors),
             }),
         )
 
@@ -148,9 +147,7 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_switches()
 
         entry = self.config_entry
-        power_sensors = _get_sensor_options(self.hass, {"w", "kw"})
         all_sensors = _get_sensor_options(self.hass)
-        pct_sensors = _get_sensor_options(self.hass, {"%"})
 
         return self.async_show_form(
             step_id="battery",
@@ -158,11 +155,11 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_BATTERY_POWER,
                     default=entry.options.get(CONF_BATTERY_POWER, ""),
-                ): vol.In(power_sensors if len(power_sensors) > 1 else all_sensors),
+                ): vol.In(all_sensors),
                 vol.Optional(
                     CONF_BATTERY_SOC,
                     default=entry.options.get(CONF_BATTERY_SOC, ""),
-                ): vol.In(pct_sensors if len(pct_sensors) > 1 else all_sensors),
+                ): vol.In(all_sensors),
             }),
         )
 
