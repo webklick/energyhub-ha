@@ -1,29 +1,40 @@
 """Config flow for EnergyHub integration."""
+import logging
 import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     DOMAIN, CONF_PAIRING_CODE, CONF_API_URL, CONF_SCAN_INTERVAL,
     DEFAULT_API_URL, DEFAULT_SCAN_INTERVAL, MIN_SCAN_INTERVAL, MAX_SCAN_INTERVAL,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def validate_pairing_code(hass: HomeAssistant, api_url: str, code: str) -> dict:
     """Validate the pairing code against the EnergyHub API."""
-    async with aiohttp.ClientSession() as session:
+    url = f"{api_url}/webhook/{code}"
+    session = async_get_clientsession(hass)
+    try:
+        _LOGGER.debug("Testing EnergyHub connection: POST %s", url)
         async with session.post(
-            f"{api_url}/webhook/{code}",
+            url,
             json={"entity_id": "_ping", "state": "connected"},
-            timeout=aiohttp.ClientTimeout(total=10),
+            timeout=aiohttp.ClientTimeout(total=15),
         ) as resp:
+            _LOGGER.debug("EnergyHub response: %d", resp.status)
             if resp.status == 200:
                 return {"success": True}
             elif resp.status == 404:
                 return {"success": False, "error": "invalid_code"}
             else:
                 return {"success": False, "error": "connection_failed"}
+    except Exception as err:
+        _LOGGER.error("EnergyHub connection error: %s", err)
+        return {"success": False, "error": "connection_failed"}
 
 
 class EnergyHubConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
