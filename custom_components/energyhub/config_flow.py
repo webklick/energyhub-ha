@@ -139,11 +139,11 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_GRID_POWER,
                     default=entry.options.get(CONF_GRID_POWER, ""),
-                ): vol.In(all_sensors),
+                ): str,
                 vol.Optional(
                     CONF_PV_POWER,
                     default=entry.options.get(CONF_PV_POWER, ""),
-                ): vol.In(all_sensors),
+                ): str,
                 vol.Optional(
                     CONF_INVERT_GRID,
                     default=entry.options.get(CONF_INVERT_GRID, False),
@@ -171,11 +171,11 @@ class EnergyHubOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_BATTERY_POWER,
                     default=entry.options.get(CONF_BATTERY_POWER, ""),
-                ): vol.In(all_sensors),
+                ): str,
                 vol.Optional(
                     CONF_BATTERY_SOC,
                     default=entry.options.get(CONF_BATTERY_SOC, ""),
-                ): vol.In(all_sensors),
+                ): str,
             }),
         )
 
